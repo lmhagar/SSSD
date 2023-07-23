@@ -12,7 +12,7 @@ Group 2: extract and process data from the ENIGH 2018 website and use this data 
                            to return design values for gamma model and informative priors
 
 Group 3: code to reproduce Table 1 and Figure 2 in the main text
-- 04-two-stage-process-gamma: code to implement our two stage procedure for sample size determination
+- 04-two-stage-process-gamma: code to implement our two-stage procedure for sample size determination
 	                      with the gamma tail probability example and equivalence tests facilitated
                               via the probability of agreement
 - 05-numerical-study-length-criterion: code for confirmation study to determine how often the length
@@ -21,9 +21,9 @@ Group 3: code to reproduce Table 1 and Figure 2 in the main text
                                   criterion is satisfied for various sample sizes (Figure 2)
 
 Group 4: code to implement our methods with several extensions in Section E of supplement
-- 07-two-stage-process-poni: code to implement our two stage procedure for sample size determination
+- 07-two-stage-process-poni: code to implement our two-stage procedure for sample size determination
 	                     with the gamma tail probability example and equivalence tests facilitated
                              via the probability of noninferiority with respect to group 2 (Section E.2)
-- 08-two-stage-process-imbalanced: code to implement our two stage procedure for sample size determination
+- 08-two-stage-process-imbalanced: code to implement our two-stage procedure for sample size determination
 	                           with the gamma tail probability example and equivalence tests facilitated
                                    via the probability of agreement with imbalanced sample sizes (Section E.3)
