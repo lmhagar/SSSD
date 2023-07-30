@@ -20,7 +20,7 @@ Group 3: code to reproduce Table 1 and Figure 2 in the main text
 - 05-numerical-study-power-curve: code for confirmation study to determine how often the power
                                   criterion is satisfied for various sample sizes (Figure 2)
 
-Group 4: code to implement our methods with several extensions in Section E of supplement
+Group 4: code to implement our methods with several extensions in Section D of supplement
 - 07-two-stage-process-poni: code to implement our two-stage procedure for sample size determination
 	                     with the gamma tail probability example and equivalence tests facilitated
                              via the probability of noninferiority with respect to group 2 (Section D.2)
