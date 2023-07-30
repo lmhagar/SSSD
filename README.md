@@ -23,7 +23,7 @@ Group 3: code to reproduce Table 1 and Figure 2 in the main text
 Group 4: code to implement our methods with several extensions in Section E of supplement
 - 07-two-stage-process-poni: code to implement our two-stage procedure for sample size determination
 	                     with the gamma tail probability example and equivalence tests facilitated
-                             via the probability of noninferiority with respect to group 2 (Section E.2)
+                             via the probability of noninferiority with respect to group 2 (Section D.2)
 - 08-two-stage-process-imbalanced: code to implement our two-stage procedure for sample size determination
 	                           with the gamma tail probability example and equivalence tests facilitated
-                                   via the probability of agreement with imbalanced sample sizes (Section E.3)
+                                   via the probability of agreement with imbalanced sample sizes (Section D.3)
