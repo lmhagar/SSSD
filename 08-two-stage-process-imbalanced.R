@@ -327,18 +327,11 @@ sssdGammaq <- function(conviction, power, equivalence, gamma_alpha.1, gamma_beta
   ## find standard deviation using the formula in the article
   sigma_l <- 4*qnorm(1-criterion_alpha/2)*sqrt(Fish_ratio_sd)/criterion_l
   
-  ## expression that is proportional to posterior log-density (for single group)
+  ## function to solve for the posterior mode of each group
   ## x is the point (logalpha, logbeta) at which this function is evaluated at
   ## y = c(length(data), sum(log(data)), sum(data)); it is more efficient to
   ## compute this outside of the function that is to be optimized over
   ## other parameters are hyperparameters for the prior
-  loglik <- function(x,y, mu, tau, kappa, lambda){
-    res <- exp(x[1])*y[1]*x[2] - y[1]*log(gamma(exp(x[1]))) + (exp(x[1])-1)*y[2] - exp(x[2])*y[3] + dgamma(exp(x[1]), mu, tau, log = TRUE) + dgamma(exp(x[2]), kappa, lambda, log = TRUE) + x[1] + x[2]
-    return(-1*res)
-  }
-  
-  ## function to solve for the posterior mode of each group
-  ## x and y are parameterized as for the previous function
   fn_grad <- function(x, y, mu, tau, kappa, lambda) {
     
     res1 <- exp(x[1])*y[1]*x[2] - y[1]*digamma(exp(x[1]))*exp(x[1]) + exp(x[1])*(y[2] - tau) + mu
@@ -346,42 +339,19 @@ sssdGammaq <- function(conviction, power, equivalence, gamma_alpha.1, gamma_beta
     res2 <- y[1]*exp(x[1]) - (y[3] + lambda)*exp(x[2]) + kappa
     
     return(c(res1, res2))
-    
   }
   
-  ## function to optimize over to find the conditional variance of logalpha and logbeta
-  ## sigma is the standard deviation of the univariate (conditional) normal approximation;
-  ## to be optimized over
-  ## x is the mode given in (mode, loglik(mode)) form
-  ## pt1 and pt2 are two similar points (one where x-value is less than and greater than
-  ## mode, respectively). These points are used to minimize least squares
-  find_var_cond <- function(sigma, x, pt1, pt2){
-    if (sigma <= 0){
-      return(Inf)
-    }
-    res1 <- (x[2] - 0.5*((pt1[1] - x[1])/sigma)^2 - pt1[2])^2
-    res2 <- (x[2] - 0.5*((pt2[1] - x[1])/sigma)^2 - pt2[2])^2
-    return(res1 + res2)
-  }
-  
-  ## function to optimize over to find the correlation between logalpha and logbeta;
-  ## parameterize so that rho is the only unknown quantity for which we are
-  ## optimizing over; sig_raws are the conditional variances for each of the marginal
-  ## normal approximations for the bivariate distribution
-  find_cor <- function(rho, x, lows, highs, pts, sig_raws){
-    if (rho <= -1 | rho >= 1){
-      return(Inf)
-    }
-    
-    Alow <- (lows[1] - x[1]); Ahigh <- (highs[1] - x[1])
-    Blow <- (lows[2] - x[2]); Bhigh <- (highs[2] - x[2])
-    
-    resll <- (x[3] - 0.5*(Alow/sig_raws[1])^2 - 0.5*(Blow/sig_raws[2])^2 + Alow*Blow*rho/prod(sig_raws) - pts[1])^2
-    reslh <- (x[3] - 0.5*(Alow/sig_raws[1])^2 - 0.5*(Bhigh/sig_raws[2])^2 + Alow*Bhigh*rho/prod(sig_raws) - pts[2])^2
-    reshl <- (x[3] - 0.5*(Ahigh/sig_raws[1])^2 - 0.5*(Blow/sig_raws[2])^2 + Ahigh*Blow*rho/prod(sig_raws) - pts[3])^2
-    reshh <- (x[3] - 0.5*(Ahigh/sig_raws[1])^2 - 0.5*(Bhigh/sig_raws[2])^2 + Ahigh*Bhigh*rho/prod(sig_raws) - pts[4])^2
-    
-    return(resll + reslh + reshl + reshh)
+  ## calculate the covariance matrix for the normal approximation to the 
+  ## posterior of the gamma model according to equation (4.2) on page 84
+  ## of Gelman et al. (2013)
+  calc_covar <- function(u, v, y_star, hyper){
+    a <- exp(u); b <- exp(v); n <- length(y_star)
+    tau <- hyper[1]; lambda <- hyper[2]
+    d11 <- a*(n*digamma(a) + tau - n*v - sum(log(y_star))) + n*a^2*trigamma(a)
+    d12 <- -1*a*n
+    d22 <- b*(sum(y_star) + lambda)
+    mat <- rbind(c(d11, d12), c(d12, d22))
+    return(solve(mat))
   }
   
   ## helper function to obtain the mean and standard deviation of the normal approximation
@@ -428,73 +398,14 @@ sssdGammaq <- function(conviction, power, equivalence, gamma_alpha.1, gamma_beta
     
     n_val <- ceiling(n_val)
     
-    ## compute covariance matrices of normal approximations based just off of data (starting point)
-    mat1 <- matrix(c(1/gamma_alpha.1, 1/gamma_alpha.1, 1/gamma_alpha.1, 
-                     trigamma(gamma_alpha.1))/(trigamma(gamma_alpha.1)*gamma_alpha.1 - 1), nrow = 2)
-    mat2 <- matrix(c(1/gamma_alpha.2, 1/gamma_alpha.2, 1/gamma_alpha.2, 
-                     trigamma(gamma_alpha.2))/(trigamma(gamma_alpha.2)*gamma_alpha.2 - 1), nrow = 2)
-    
     ## summarize information from first group of data (faster computation)
     yy_star1 <- c(length(y_star1), sum(log(y_star1)), sum(y_star1))
     ## find posterior modes for the first group (logalpha and logbeta)
     modes <- nleqslv(log(c(gamma_alpha.1, gamma_beta.1)), fn_grad, y = yy_star1, mu = hyper[1,1], tau = hyper[1,2],
                      kappa = hyper[2,1], lambda = hyper[2,2] )$x
     
-    ## create two points at which to minimize difference between posterior log-density and normal approximation
-    ## one is less than mode and one is greater than mode
-    x_high <- modes[1] + qnorm(0.75)*sqrt(mat1[1,1]*(1-mat1[1,2]^2/(mat1[1,1]*mat1[2,2]))/n_val)
-    x_low <- modes[1] - qnorm(0.75)*sqrt(mat1[1,1]*(1-mat1[1,2]^2/(mat1[1,1]*mat1[2,2]))/n_val)
-    
-    ## compute log-posterior at these points
-    pts1 <- c(x_low, -1*loglik(c(x_low, modes[2]), y = yy_star1, mu = hyper[1,1], tau = hyper[1,2],
-                               kappa = hyper[2,1], lambda = hyper[2,2]))
-    pts2 <- c(x_high, -1*loglik(c(x_high, modes[2]), y = yy_star1, mu = hyper[1,1], tau = hyper[1,2],
-                                kappa = hyper[2,1], lambda = hyper[2,2]))
-    pts_mode <- c(modes[1], -1*loglik(modes, y = yy_star1, mu = hyper[1,1], tau = hyper[1,2],
-                                      kappa = hyper[2,1], lambda = hyper[2,2]))
-    
-    ## choose conditional variance that minimizes sum of squares
-    sigma1_raw <- optim(sqrt(mat1[1,1]*(1-mat1[1,2]^2/(mat1[1,1]*mat1[2,2]))/n_val), 
-                        find_var_cond, x = pts_mode, pt1 = pts1, pt2 = pts2, 
-                        control = list(warn.1d.NelderMead = FALSE))$par
-    
-    ## find the conditional variance for the beta parameter (repeat steps for logalpha in the first group)
-    xx_high <- modes[2] + qnorm(0.75)*sqrt(mat1[2,2]*(1-mat1[1,2]^2/(mat1[1,1]*mat1[2,2]))/n_val)
-    xx_low <- modes[2] - qnorm(0.75)*sqrt(mat1[2,2]*(1-mat1[1,2]^2/(mat1[1,1]*mat1[2,2]))/n_val)
-    
-    pts1 <- c(xx_low, -1*loglik(c(modes[1], xx_low), y = yy_star1, mu = hyper[1,1], tau = hyper[1,2],
-                                kappa = hyper[2,1], lambda = hyper[2,2]))
-    pts2 <- c(xx_high, -1*loglik(c(modes[1], xx_high), y = yy_star1, mu = hyper[1,1], tau = hyper[1,2],
-                                 kappa = hyper[2,1], lambda = hyper[2,2]))
-    pts_mode <- c(modes[2], -1*loglik(modes, y = yy_star1, mu = hyper[1,1], tau = hyper[1,2],
-                                      kappa = hyper[2,1], lambda = hyper[2,2]))
-    sigma2_raw <- optim(sqrt(mat1[2,2]*(1-mat1[1,2]^2/(mat1[1,1]*mat1[2,2]))/n_val), 
-                        find_var_cond, x = pts_mode, pt1 = pts1, pt2 = pts2, 
-                        control = list(warn.1d.NelderMead = FALSE))$par
-    
-    ## now we need to find the correlation (compute posterior log-density at 4 points on axes around posterior mode)
-    ptll <- -1*loglik(c(x_low, xx_low), y = yy_star1, mu = hyper[1,1], tau = hyper[1,2],
-                      kappa = hyper[2,1], lambda = hyper[2,2])
-    ptlh <- -1*loglik(c(x_low, xx_high), y = yy_star1, mu = hyper[1,1], tau = hyper[1,2],
-                      kappa = hyper[2,1], lambda = hyper[2,2])
-    pthl <- -1*loglik(c(x_high, xx_low), y = yy_star1, mu = hyper[1,1], tau = hyper[1,2],
-                      kappa = hyper[2,1], lambda = hyper[2,2])
-    pthh <- -1*loglik(c(x_high, xx_high), y = yy_star1, mu = hyper[1,1], tau = hyper[1,2],
-                      kappa = hyper[2,1], lambda = hyper[2,2])
-    
-    ## find the correlation that minimizes the sum of squares between these four quantiles
-    rho_raw <- optim(mat1[1,2]/sqrt(mat1[1,1]*mat1[2,2]), 
-                     find_cor, x = c(modes, pts_mode[2]), lows = c(x_low, xx_low), 
-                     highs = c(x_high, xx_high), pts = c(ptll, ptlh, pthl, pthh),
-                     sig_raws = c(sigma1_raw, sigma2_raw), 
-                     control = list(warn.1d.NelderMead = FALSE))$par
-    
-    ## divide by (1-rho^2) to obtain unconditional variance for each parameter 
-    sigma1_adj <- sqrt(sigma1_raw^2/(1- rho_raw^2))
-    sigma2_adj <- sqrt(sigma2_raw^2/(1- rho_raw^2))
     ## create covariance matrix for approximately normal posterior that accounts for priors
-    mat1_new <- rbind(c(sigma1_adj^2, rho_raw*sigma1_adj*sigma2_adj),
-                      c(rho_raw*sigma1_adj*sigma2_adj, sigma2_adj^2))
+    mat1_new <- calc_covar(modes[1], modes[2], y_star1, c(hyper[1,2], hyper[2,2]))
     ## exponentiate modes to return to standard scale
     modes1 <- exp(modes)
     
@@ -503,53 +414,7 @@ sssdGammaq <- function(conviction, power, equivalence, gamma_alpha.1, gamma_beta
     modes <- nleqslv(log(c(gamma_alpha.2, gamma_beta.2)), fn_grad, y = yy_star2, mu = hyper[3,1], tau = hyper[3,2],
                      kappa = hyper[4,1], lambda = hyper[4,2] )$x
     
-    x_high <- modes[1] + qnorm(0.75)*sqrt(mat2[1,1]*(1-mat2[1,2]^2/(mat2[1,1]*mat2[2,2]))/N2)
-    x_low <- modes[1] - qnorm(0.75)*sqrt(mat2[1,1]*(1-mat2[1,2]^2/(mat2[1,1]*mat2[2,2]))/N2)
-    
-    pts1 <- c(x_low, -1*loglik(c(x_low, modes[2]), y = yy_star2, mu = hyper[3,1], tau = hyper[3,2],
-                               kappa = hyper[4,1], lambda = hyper[4,2]))
-    pts2 <- c(x_high, -1*loglik(c(x_high, modes[2]), y = yy_star2, mu = hyper[3,1], tau = hyper[3,2],
-                                kappa = hyper[4,1], lambda = hyper[4,2]))
-    pts_mode <- c(modes[1], -1*loglik(modes, y = yy_star2, mu = hyper[3,1], tau = hyper[3,2],
-                                      kappa = hyper[4,1], lambda = hyper[4,2]))
-    
-    sigma1_raw <- optim(sqrt(mat2[1,1]*(1-mat2[1,2]^2/(mat2[1,1]*mat2[2,2]))/N2), 
-                        find_var_cond, x = pts_mode, pt1 = pts1, pt2 = pts2, 
-                        control = list(warn.1d.NelderMead = FALSE))$par
-    
-    ## find the raw variance for the beta parameter
-    xx_high <- modes[2] + qnorm(0.75)*sqrt(mat2[2,2]*(1-mat2[1,2]^2/(mat2[1,1]*mat2[2,2]))/N2)
-    xx_low <- modes[2] - qnorm(0.75)*sqrt(mat2[2,2]*(1-mat2[1,2]^2/(mat2[1,1]*mat2[2,2]))/N2)
-    
-    pts1 <- c(xx_low, -1*loglik(c(modes[1], xx_low), y = yy_star2, mu = hyper[3,1], tau = hyper[3,2],
-                                kappa = hyper[4,1], lambda = hyper[4,2]))
-    pts2 <- c(xx_high, -1*loglik(c(modes[1], xx_high), y = yy_star2, mu = hyper[3,1], tau = hyper[3,2],
-                                 kappa = hyper[4,1], lambda = hyper[4,2]))
-    pts_mode <- c(modes[2], -1*loglik(modes, y = yy_star2, mu = hyper[3,1], tau = hyper[3,2],
-                                      kappa = hyper[4,1], lambda = hyper[4,2]))
-    sigma2_raw <- optim(sqrt(mat2[2,2]*(1-mat2[1,2]^2/(mat2[1,1]*mat2[2,2]))/N2), 
-                        find_var_cond, x = pts_mode, pt1 = pts1, pt2 = pts2, 
-                        control = list(warn.1d.NelderMead = FALSE))$par
-    
-    ## now we need to find the correlation
-    ptll <- -1*loglik(c(x_low, xx_low), y = yy_star2, mu = hyper[3,1], tau = hyper[3,2],
-                      kappa = hyper[4,1], lambda = hyper[4,2])
-    ptlh <- -1*loglik(c(x_low, xx_high), y = yy_star2, mu = hyper[3,1], tau = hyper[3,2],
-                      kappa = hyper[4,1], lambda = hyper[4,2])
-    pthl <- -1*loglik(c(x_high, xx_low), y = yy_star2, mu = hyper[3,1], tau = hyper[3,2],
-                      kappa = hyper[4,1], lambda = hyper[4,2])
-    pthh <- -1*loglik(c(x_high, xx_high), y = yy_star2, mu = hyper[3,1], tau = hyper[3,2],
-                      kappa = hyper[4,1], lambda = hyper[4,2])
-    rho_raw <- optim(mat2[1,2]/sqrt(mat2[1,1]*mat2[2,2]), 
-                     find_cor, x = c(modes, pts_mode[2]), lows = c(x_low, xx_low), 
-                     highs = c(x_high, xx_high), pts = c(ptll, ptlh, pthl, pthh),
-                     sig_raws = c(sigma1_raw, sigma2_raw), 
-                     control = list(warn.1d.NelderMead = FALSE))$par
-    
-    sigma1_adj <- sqrt(sigma1_raw^2/(1- rho_raw^2))
-    sigma2_adj <- sqrt(sigma2_raw^2/(1- rho_raw^2))
-    mat2_new <- rbind(c(sigma1_adj^2, rho_raw*sigma1_adj*sigma2_adj),
-                      c(rho_raw*sigma1_adj*sigma2_adj, sigma2_adj^2))
+    mat2_new <- calc_covar(modes[1], modes[2], y_star2, c(hyper[3,2], hyper[4,2]))
     modes2 <- exp(modes)
     a1 <- modes1[1]; b1 <- modes1[2]; a2 <- modes2[1]; b2 <- modes2[2]
     
