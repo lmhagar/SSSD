@@ -152,6 +152,7 @@ beta.2 <- figure1.data[[4]]
 breaks1 <- hist(y1, plot=FALSE)$breaks
 breaks2 <- hist(y2, plot=FALSE)$breaks
 binwidth2 <-0.64
+bins2 <- seq(0, 19.2, binwidth2)
 
 ## create data frames for plotting
 x_fit1 <- seq(floor(qgamma(0.001,mean(alpha.1),mean(beta.1))),
@@ -176,7 +177,7 @@ percentile <- 0.9
 ## make the plot for the female provider group data (top left corner)
 plot1a <-
   ggplot(data=foodF, aes(foodF$food)) + theme_bw() +
-  geom_histogram(aes(y = (stat(count) / sum(count))/binwidth2), binwidth= binwidth2,
+  geom_histogram(aes(y = (stat(count) / sum(count))/binwidth2), breaks = bins2,
                  col="cadetblue4", 
                  fill="cadetblue2", 
                  alpha = 0, size = 1) + 
@@ -191,7 +192,7 @@ plot1a <-
   geom_segment(aes(x = 4.82, y = 0, 
                    xend=4.82, yend = (Inf*(use_pctl))), color="grey16", size=1.5) +
   theme(axis.text=element_text(size=12),
-        axis.title=element_text(size=14))
+        axis.title=element_text(size=14)) + ylim(0, 0.3)
 
 group2_name <- "Male Household Provider"
 n2 <- length(y2)
@@ -199,7 +200,7 @@ metric_value2 <- round(mean(ifelse(foodM$food >= 4.82,1,0)),3)
 
 ## make the plot for the male provider group (bottom left corner)
 plot1c <- ggplot(data=foodM, aes(foodM$food)) + theme_bw() +
-  geom_histogram(aes(y = (stat(count) / sum(count))/binwidth2), binwidth= binwidth2,
+  geom_histogram(aes(y = (stat(count) / sum(count))/binwidth2), breaks = bins2,
                  col="darkolivegreen", 
                  fill="darkolivegreen2", 
                  alpha = 0, size = 1) + 
@@ -213,7 +214,7 @@ plot1c <- ggplot(data=foodM, aes(foodM$food)) + theme_bw() +
         axis.title=element_text(size=14)) +
   geom_area(data = fit2, aes(x=xfit, y=yfit), fill="darkolivegreen2", col="darkolivegreen", alpha=0.45, size = 1) + 
   geom_segment(aes(x = 4.82, y = 0, 
-                   xend=4.82, yend = (Inf*(use_pctl))), color="grey16", size=1.5)
+                   xend=4.82, yend = (Inf*(use_pctl))), color="grey16", size=1.5) + ylim(0, 0.3)
 
 ## approximate the posterior using nonparametric density estimation
 d <- density(theta)
@@ -288,7 +289,7 @@ fig1.row2 <- plot_grid(plot1c + theme(plot.margin=unit(c(0.5,0.5,0.5,0.5),"cm"))
 fig1 <- plot_grid(fig1.row1, fig1.row2, nrow = 2)
 
 ## output as .pdf file for the article
-pdf(file = "Figure1Aguas.pdf",   # The directory you want to save the file in
+pdf(file = "Figure1BA.pdf",   # The directory you want to save the file in
     width = 11.7895, # The width of the plot in inches (12.41)
     height = 10.165) # The height of the plot in inches (10.7)
 
